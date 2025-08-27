@@ -152,13 +152,17 @@ git push origin main
 ## Point Docker to Minikube
 eval $(minikube docker-env)
 
-docker build -t llmops-app:latest .
+docker build -t flask-app:latest .
 
 kubectl create secret generic llmops-secrets \
   --from-literal=GROQ_API_KEY="" \
+  --from-literal=ASTRA_DB_APPLICATION_TOKEN="" \
+  --from-literal=ASTRA_DB_KEYSPACE="default_keyspace" \
+  --from-literal=ASTRA_DB_API_ENDPOINT="" \
+  --from-literal=HF_TOKEN="" \
   --from-literal=HUGGINGFACEHUB_API_TOKEN=""
 
-kubectl apply -f llmops-k8s.yaml
+kubectl apply -f flask-deployment.yaml
 
 
 kubectl get pods
@@ -173,86 +177,46 @@ minikube tunnel
 
 # Open another terminal
 
-kubectl port-forward svc/llmops-service 8501:80 --address 0.0.0.0
+kubectl port-forward svc/flask-service 5000:80 --address 0.0.0.0
 
 ## Now copy external ip and :8501 and see ur app there....
 
 
 ```
 
-### 6. GRAFANA CLOUD MONITORING
+### 6. PROMETHEUS AND GRAFANA MONITORING OF YOUR APP
+## Open another VM terminal 
 
-```bash
-## Open another VM terminal for Grfana cloud
-
-kubectl create ns monitoring
+kubectl create namespace monitoring
 
 kubectl get ns
 
-## Make account on Grfaana cloud
 
-### Install HELM - Search on Google
--- Copy commands from script section..
--- U will get 3 commands
+kubectl apply -f prometheus/prometheus-configmap.yaml
 
+kubectl apply -f prometheus/prometheus-deployment.yaml
 
-## Come to grafana cloud --> Left pane observability --> Kubernetes--> start sending data
-## In backend installation --> Hit install
-## Give your clustername and namespace there : minikube and monitoring in our case
-## Select kubernetes
-## Keep other things on as default
-## Here only create new access token give name lets give minikube-token & Create it and save it somewhere..
-## Select helm and deploy helm charts is already generated...
+kubectl apply -f grafana/grafana-deployment.yaml
 
+## Check target health also..
+## On IP:9090
+kubectl port-forward --address 0.0.0.0 svc/prometheus-service -n monitoring 9090:9090
+
+## Username:Pass --> admin:admin
+kubectl port-forward --address 0.0.0.0 svc/grafana-service -n monitoring 3000:3000
 
 
-## Come to terminal --> Create a file
-vi values.yaml
+
+Configure Grafana
+Go to Settings > Data Sources > Add Data Source
+
+Choose Prometheus
+
+URL: http://prometheus-service.monitoring.svc.cluster.local:9090
+
+Click Save & Test
+
+Green success mesaage shown....
 
 
-## Paste all from there to your file now remove last EOF part & and also initial part save that initial part we need it..
-
-Example : 
-
-helm repo add grafana https://grafana.github.io/helm-charts &&
-  helm repo update &&
-  helm upgrade --install --atomic --timeout 300s grafana-k8s-monitoring grafana/k8s-monitoring \
-    --namespace "monitoring" --create-namespace --values - <<'EOF'
-
-### Remove this above intial part and save it somewhere
-
-Then Esc+wq! amd save the file
-
-
-## Now use the copied command just make some modification:
-Remove that EOF part and instead write
---values values.yaml
-
-Example:
-
-helm repo add grafana https://grafana.github.io/helm-charts &&
-  helm repo update &&
-  helm upgrade --install --atomic --timeout 300s grafana-k8s-monitoring grafana/k8s-monitoring \
-    --namespace "monitoring" --create-namespace --values values.yaml
-
-## Paste this command on VM u will get status deployed revision 1
-## It means it was a SUCESS
-
-To check:
-
-kubectl get pods -n monitoring
-
-# These are all should be running.....
-
-Go to grafana cloud again..
-And below u will get go to homepage click it..
-Just refresh the page and boom..
-
-
-Now u can see metrics related to your kubernetes cluster..
-
----Explore it for yourself now 
-
----Make sure to do cleanup 
-
-```
+######################################
